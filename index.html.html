@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<title>Lấy mã OTP tự động từ Gmail</title>
+<style>
+  :root{
+    --bg:#0f1310;
+    --panel:#161c18;
+    --line:#2a332c;
+    --text:#e8ede8;
+    --muted:#8a988c;
+    --accent:#7ee08a;
+    --accent-dim:#3a5c3f;
+    --danger:#e08a7e;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--text);
+    font-family:'Segoe UI', system-ui, -apple-system, sans-serif;
+    padding:32px 20px 60px;
+  }
+  .wrap{max-width:640px;margin:0 auto;}
+  .eyebrow{
+    font-size:12px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--accent);font-weight:600;margin-bottom:6px;
+  }
+  h1{font-size:26px;margin:0 0 6px;font-weight:700;letter-spacing:-0.01em;}
+  .sub{color:var(--muted);font-size:14px;margin-bottom:28px;line-height:1.6;}
+
+  .card{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:14px;
+    padding:22px;
+    margin-bottom:18px;
+  }
+  .card h2{font-size:14px;color:var(--muted);font-weight:600;margin:0 0 14px;text-transform:uppercase;letter-spacing:.06em;}
+
+  label.field{display:block;font-size:13px;color:var(--muted);margin-bottom:6px;}
+  input[type=text]{
+    width:100%;
+    background:#0c100d;
+    border:1px solid var(--line);
+    border-radius:8px;
+    padding:11px 12px;
+    color:var(--text);
+    font-size:14px;
+    outline:none;
+  }
+  input[type=text]:focus{border-color:var(--accent-dim);}
+
+  .row{display:flex;gap:10px;align-items:center;margin-top:14px;flex-wrap:wrap;}
+
+  button{
+    background:var(--accent);
+    color:#0c1a0e;
+    border:none;
+    border-radius:8px;
+    padding:11px 18px;
+    font-size:14px;
+    font-weight:700;
+    cursor:pointer;
+  }
+  button.secondary{
+    background:transparent;
+    color:var(--text);
+    border:1px solid var(--line);
+    font-weight:600;
+  }
+  button:disabled{opacity:.5;cursor:default;}
+
+  .status{font-size:13px;color:var(--muted);margin-top:10px;min-height:18px;}
+  .status.err{color:var(--danger);}
+
+  .toggle{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted);}
+
+  #controls{display:none;}
+  #codesCard{display:none;}
+
+  .code-item{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:14px;
+    padding:14px 0;
+    border-bottom:1px solid var(--line);
+  }
+  .code-item:last-child{border-bottom:none;}
+  .code-num{
+    font-family:'SF Mono', Consolas, monospace;
+    font-size:22px;
+    font-weight:700;
+    letter-spacing:.06em;
+    color:var(--accent);
+    min-width:110px;
+  }
+  .code-meta{flex:1;text-align:right;}
+  .code-meta .subj{font-size:13px;color:var(--text);margin-bottom:2px;}
+  .code-meta .from{font-size:12px;color:var(--muted);}
+  .code-meta .time{font-size:11px;color:var(--muted);opacity:.8;}
+  .empty{color:var(--muted);font-size:13px;padding:8px 0;}
+
+  .steps{font-size:13px;color:var(--muted);line-height:1.8;}
+  .steps b{color:var(--text);}
+  a{color:var(--accent);}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="eyebrow">Otp inbox</div>
+  <h1>Lấy mã OTP tự động</h1>
+  <div class="sub">Đọc thẳng từ Gmail của ní, lọc email chứa mã xác thực (TikTok Shop, Shopee, v.v.) mà không cần cầm điện thoại. Toàn bộ chạy trong trình duyệt — không có server nào lưu lại dữ liệu này.</div>
+
+  <div class="card" id="setupCard">
+    <h2>Bước 1 — Kết nối Gmail</h2>
+    <label class="field">Google OAuth Client ID</label>
+    <input type="text" id="clientId" placeholder="xxxxxxxx.apps.googleusercontent.com">
+    <div class="row">
+      <button onclick="initAuth()">Kết nối Gmail</button>
+    </div>
+    <div class="status" id="setupStatus"></div>
+  </div>
+
+  <div class="card" id="controls">
+    <h2>Bước 2 — Theo dõi mã mới</h2>
+    <div class="row">
+      <button onclick="fetchCodes()">Làm mới ngay</button>
+      <label class="toggle">
+        <input type="checkbox" id="autoRefresh" onchange="toggleAuto()">
+        Tự động làm mới mỗi 15 giây
+      </label>
+    </div>
+    <div class="status" id="fetchStatus"></div>
+  </div>
+
+  <div class="card" id="codesCard">
+    <h2>Mã gần đây</h2>
+    <div id="codes"></div>
+  </div>
+
+  <div class="card">
+    <h2>Cách lấy Client ID (chỉ cần làm 1 lần)</h2>
+    <div class="steps">
+      1. Vào <a href="https://console.cloud.google.com/" target="_blank">console.cloud.google.com</a>, tạo một project mới (miễn phí).<br>
+      2. Vào <b>APIs & Services → Library</b>, tìm và bật <b>Gmail API</b>.<br>
+      3. Vào <b>APIs & Services → OAuth consent screen</b>, chọn <b>External</b>, điền tên app + email của ní, thêm chính email Gmail của ní vào mục <b>Test users</b>.<br>
+      4. Vào <b>APIs & Services → Credentials → Create Credentials → OAuth client ID</b>, chọn loại <b>Web application</b>.<br>
+      5. Ở mục <b>Authorized JavaScript origins</b>, thêm đúng địa chỉ mà trang này đang chạy (xem trên thanh địa chỉ trình duyệt của ní).<br>
+      6. Copy <b>Client ID</b> vừa tạo, dán vào ô phía trên.
+    </div>
+  </div>
+</div>
+
+<script src="https://accounts.google.com/gsi/client"></script>
+<script>
+let tokenClient = null;
+let accessToken = null;
+let autoTimer = null;
+
+function setStatus(id, msg, isErr){
+  const el = document.getElementById(id);
+  el.textContent = msg || '';
+  el.className = 'status' + (isErr ? ' err' : '');
+}
+
+function initAuth(){
+  const clientId = document.getElementById('clientId').value.trim();
+  if(!clientId){
+    setStatus('setupStatus', 'Dán Client ID vào trước đã ní ơi.', true);
+    return;
+  }
+  if(typeof google === 'undefined' || !google.accounts){
+    setStatus('setupStatus', 'Không tải được thư viện Google. Kiểm tra kết nối mạng rồi thử lại.', true);
+    return;
+  }
+  setStatus('setupStatus', 'Đang mở cửa sổ đăng nhập Google...');
+  tokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: clientId,
+    scope: 'https://www.googleapis.com/auth/gmail.readonly',
+    callback: (resp) => {
+      if(resp.error){
+        setStatus('setupStatus', 'Lỗi xác thực: ' + resp.error + '. Kiểm tra lại Client ID và Authorized origins.', true);
+        return;
+      }
+      accessToken = resp.access_token;
+      setStatus('setupStatus', 'Đã kết nối Gmail thành công.');
+      document.getElementById('controls').style.display = 'block';
+      document.getElementById('codesCard').style.display = 'block';
+      fetchCodes();
+    }
+  });
+  tokenClient.requestAccessToken();
+}
+
+function toggleAuto(){
+  const on = document.getElementById('autoRefresh').checked;
+  if(on){
+    autoTimer = setInterval(fetchCodes, 15000);
+  } else {
+    clearInterval(autoTimer);
+  }
+}
+
+async function fetchCodes(){
+  if(!accessToken){ return; }
+  setStatus('fetchStatus', 'Đang kiểm tra email mới...');
+  const codesDiv = document.getElementById('codes');
+  try{
+    const q = encodeURIComponent('newer_than:2d (OTP OR "mã xác thực" OR "verification code" OR "mã OTP" OR "mã đăng nhập" OR "login code")');
+    const listRes = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${q}&maxResults=8`, {
+      headers: { Authorization: 'Bearer ' + accessToken }
+    });
+    if(listRes.status === 401){
+      setStatus('fetchStatus', 'Phiên đăng nhập hết hạn, bấm "Kết nối Gmail" lại.', true);
+      return;
+    }
+    const listData = await listRes.json();
+    if(!listData.messages || listData.messages.length === 0){
+      codesDiv.innerHTML = '<div class="empty">Chưa có email OTP nào gần đây.</div>';
+      setStatus('fetchStatus', 'Đã kiểm tra — không có email mới.');
+      return;
+    }
+
+    const items = [];
+    for(const msg of listData.messages){
+      const msgRes = await fetch(
+        `https://gmail.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date`,
+        { headers: { Authorization: 'Bearer ' + accessToken } }
+      );
+      const msgData = await msgRes.json();
+      const headers = (msgData.payload && msgData.payload.headers) || [];
+      const from = (headers.find(h => h.name === 'From') || {}).value || '';
+      const subject = (headers.find(h => h.name === 'Subject') || {}).value || '';
+      const date = (headers.find(h => h.name === 'Date') || {}).value || '';
+      const snippet = msgData.snippet || '';
+      const codeMatch = snippet.match(/\b\d{4,8}\b/);
+      items.push({
+        code: codeMatch ? codeMatch[0] : '—',
+        from, subject, date
+      });
+    }
+
+    codesDiv.innerHTML = items.map(it => `
+      <div class="code-item">
+        <div class="code-num">${it.code}</div>
+        <div class="code-meta">
+          <div class="subj">${escapeHtml(it.subject)}</div>
+          <div class="from">${escapeHtml(it.from)}</div>
+          <div class="time">${escapeHtml(it.date)}</div>
+        </div>
+      </div>
+    `).join('');
+
+    setStatus('fetchStatus', 'Cập nhật lúc ' + new Date().toLocaleTimeString('vi-VN'));
+  } catch(e){
+    setStatus('fetchStatus', 'Lỗi: ' + e.message, true);
+  }
+}
+
+function escapeHtml(str){
+  const d = document.createElement('div');
+  d.textContent = str;
+  return d.innerHTML;
+}
+</script>
+</body>
+</html>
