@@ -209,7 +209,7 @@ async function fetchCodes(){
   setStatus('fetchStatus', 'Đang kiểm tra email mới...');
   const codesDiv = document.getElementById('codes');
   try{
-    const q = encodeURIComponent('newer_than:2d (OTP OR "mã xác thực" OR "verification code" OR "mã OTP" OR "mã đăng nhập" OR "login code")');
+    const q = encodeURIComponent('newer_than:3d (OTP OR "mã xác thực" OR "mã xác minh" OR "mã xác nhận" OR "verification code" OR "mã OTP" OR "mã đăng nhập" OR "login code" OR "security code" OR verify OR "your code")');
     const listRes = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${q}&maxResults=8`, {
       headers: { Authorization: 'Bearer ' + accessToken }
     });
